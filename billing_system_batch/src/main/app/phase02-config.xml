@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<flow name="phase02_Flow">
+		<vm:inbound-endpoint path="phase2" doc:name="VM" />
+		<set-variable variableName="token" value="#[payload.token]"
+			doc:name="Variable" />
+		<set-variable variableName="traceID"
+			value="#[message.inboundProperties.'traceID']" doc:name="Variable" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query><![CDATA[SELECT * FROM invoice WHERE billing_id = #[payload['id']] AND active = true;]]></db:parameterized-query>
+		</db:select>
+		<choice>
+			<when expression="#[payload.size() > 0]">
+				<collection-splitter doc:name="Collection Splitter" />
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [PHASE-02 Invoice DATA : #[payload]]"
+					doc:name="Logger" />
+				<expression-component doc:name="Expression">
+					<![CDATA[
+					requestMap = payload;
+					requestMap['token']= flowVars['token'];	
+					payload = requestMap;]]>
+				</expression-component>
+				<message-properties-transformer>
+					<add-message-property value="#[flowVars['traceID']]"
+						key="traceID" />
+				</message-properties-transformer>
+				<vm:outbound-endpoint path="phase3" />
+			</when>
+			<otherwise>
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [NO Invoice to Processed]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+</mule>

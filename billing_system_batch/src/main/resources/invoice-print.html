@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<title>Invoice | Print</title>
+<!-- Tell the browser to be responsive to screen width -->
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!-- Google Font: Source Sans Pro -->
+<link
+	href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700"
+	rel="stylesheet" />
+<style>
+table {
+	border-collapse: collapse;
+}
+
+td {
+	border-bottom: 1pt solid black;
+}
+
+th {
+	border-bottom: 1pt solid black;
+}
+</style>
+<style>
+body, html {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+
+.div1 {
+	width: 50%;
+	float: left;
+	height: 100%;
+}
+
+.div2 {
+	width: 50%;
+	float: right;
+	height: 100%;
+}
+</style>
+<style>
+.footer {
+	position: fixed;
+	left: 0;
+	bottom: 0;
+	width: 100%;
+	color: grey;
+	font-size: small;
+	text-align: center;
+}
+</style>
+</head>
+<body>
+	<div class="wrapper">
+		<!-- Main content -->
+		<section class="invoice">
+			<!-- title row -->
+			<div class="row">
+				<div class="col-12">
+					<h2 class="page-header">
+						<div align="left">#[flowVars['billerName']]</div>
+						<div align="right">Date:
+							#[server.dateTime.dayOfMonth]/#[server.dateTime.month]/#[server.dateTime.year]</div>
+					</h2>
+				</div>
+				<!-- /.col -->
+			</div>
+			<!-- info row -->
+			<div class="row invoice-info">
+				<div class="div1">
+					From
+					<address>
+						<strong>#[flowVars['billerName']]</strong><br />
+						#[flowVars['billerAddress']]<br /> Phone:
+						#[flowVars['billerMsisdn']]<br /> Email:
+						#[flowVars['billerEmail']]
+					</address>
+				</div>
+				<!-- /.col -->
+				<br />
+				<div align="right">
+					<b>Invoice ##[flowVars['invoiceData'].invoice_number]</b><br /> <br />
+					<b>Payment Due:</b>
+					#[flowVars['billingCycle']]/#[billing.batch.processor.Utils.nextMonth()]/#[server.dateTime.year]<br />
+					<b>Payment Code:</b> #[flowVars['invoiceData'].paymentCode]
+				</div>
+				<br />
+				<div class="col-sm-4 invoice-col">
+					To
+					<address>
+						<strong>#[flowVars['memberName']]</strong><br />
+						#[flowVars['memberAddress']]<br /> Phone:
+						#[flowVars['memberMsisdn']]<br /> Email:
+						#[flowVars['memberEmail']]
+					</address>
+				</div>
+				<!-- /.col -->
+				<br />
+			</div>
+			<!-- /.row -->
+			<br />
+			<!-- Table row -->
+			<div class="row">
+				<div class="col-12 table-responsive">
+					<table width="100%">
+						<thead>
+							<tr>
+								<th>No</th>
+								<th>Item</th>
+								<th>Amount</th>
+							</tr>
+						</thead>
+						<tbody>#[payload]
+						</tbody>
+					</table>
+				</div>
+				<!-- /.col -->
+			</div>
+			<!-- /.row -->
+
+			<div>
+				<!-- accepted payments column -->
+				<div class="div1">
+					<p class="lead">Payment Methods:</p>
+
+					<p class="text-muted well well-sm shadow-none"
+						style="margin-top: 10px;">
+						1. Bank Transfer <br />For instant payment using transfer, please
+						use the following Payment Code <b>#[flowVars['invoiceData'].paymentCode]</b>.
+					</p>
+				</div>
+				<!-- /.col -->
+				<div class="div2">
+					<p class="lead">Amount Due
+						#[flowVars['billingCycle']]/#[billing.batch.processor.Utils.nextMonth()]/#[server.dateTime.year]</p>
+
+					<div>
+						<table width="100%">
+							<tr>
+								<th align="left">Subtotal:</th>
+								<td>Rp.
+									#[billing.batch.processor.Utils.formatAmount((int)flowVars['invoiceData'].amount)],-</td>
+							</tr>
+							<tr>
+								<th align="left">Total Fee:</th>
+								<td>Rp. 0,-</td>
+							</tr>
+							<tr>
+								<th align="left">Total Discount:</th>
+								<td>Rp. 0,-</td>
+							</tr>
+							<tr>
+								<th align="left">Total:</th>
+								<td>Rp.
+									#[billing.batch.processor.Utils.formatAmount((int)flowVars['invoiceData'].amount)],-</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+				<!-- /.col -->
+			</div>
+			<!-- /.row -->
+		</section>
+		<!-- /.content -->
+	</div>
+	<!-- ./wrapper -->
+
+	<div class="footer">
+		<hr />
+		Copyright (c) 2020 <a href="http://tap.in">Tagihan Pintar</a>
+	</div>
+</body>
+</html>

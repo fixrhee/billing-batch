@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+	<flow name="phase04_Flow">
+		<vm:inbound-endpoint path="phase4" doc:name="VM" />
+		<set-variable value="#[payload]" variableName="invoiceData"
+			doc:name="Variable" />
+		<set-variable variableName="traceID"
+			value="#[message.inboundProperties.'traceID']" doc:name="Variable" />
+		<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query><![CDATA[INSERT into invoice_published (invoice_id, billing_id, biller_id, member_id, invoice_number, payment_code, amount, description) values (#[payload.id], #[payload.billing_id], #[payload.biller_id], #[payload.member_id], #[payload.invoice_number], #[payload.paymentCode], #[payload.amount], #[payload.description]);]]></db:parameterized-query>
+		</db:insert>
+		<choice>
+			<when expression="#[payload == 1]">
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [Invoice Published Succesfully, Payload : #[flowVars['invoiceData']]]" />
+				<set-payload value="#[invoiceData]" />
+				<message-properties-transformer>
+					<add-message-property value="#[flowVars['traceID']]"
+						key="traceID" />
+				</message-properties-transformer>
+				<vm:outbound-endpoint path="phase5" />
+			</when>
+			<otherwise>
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [Invoice Publishing Failed, Error : #[payload], Payload : #[flowVars['invoiceData']]]" />
+				<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query><![CDATA[INSERT into message (from_member_id, to_member_id, subject, body) values (#[1], #[flowVars['invoiceData'].biller_id], Invoice Publish Failed, The following Invoice Number #[flowVars['invoiceData'].invoice_number] failed to publish);]]></db:parameterized-query>
+				</db:insert>
+			</otherwise>
+		</choice>
+	</flow>
+
+</mule>

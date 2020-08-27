@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<flow name="login_Flow">
+		<vm:inbound-endpoint path="login" doc:name="VM" />
+		<set-variable value="#[message.id]" variableName="traceID"
+			doc:name="Variable" />
+		<logger level="INFO"
+			message="[Executing Batch Job with ID : #[flowVars['traceID']]]" />
+		<message-properties-transformer>
+			<add-message-property value="${narobil.api.key}"
+				key="APIKey" />
+		</message-properties-transformer>
+		<http:request config-ref="HTTP_Request_Login_Configuration"
+			path="Session/Login" method="GET" doc:name="HTTP">
+			<http:success-status-code-validator
+				values="200,400,401,403,405,440,498,500" />
+		</http:request>
+		<byte-array-to-string-transformer />
+		<json:json-to-object-transformer
+			returnClass="java.util.Map" mimeType="application/java" doc:name="JSON to Object" />
+		<choice>
+			<when expression="payload.error != null">
+				<logger level="INFO" message="[#[flowVars['traceID']]] - [INVALID APIKey : ${narobil.api.key}]" />
+			</when>
+			<when expression="#[payload.status.message == 'PROCESSED']">
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [TOKEN : #[payload.LoginResponse[0].token]]" />
+				<set-payload value="#[payload.LoginResponse[0].token]" />
+				<message-properties-transformer>
+					<add-message-property value="#[flowVars['traceID']]"
+						key="traceID" />
+				</message-properties-transformer>
+				<vm:outbound-endpoint path="phase1" doc:name="VM" />
+			</when>
+			<otherwise>
+				<logger level="INFO"
+					message="#[flowVars['sessionID']-[LOGIN Failed : #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+</mule>

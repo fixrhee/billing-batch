@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd">
+
+	<db:mysql-config name="MySQL_Configuration" url="${database.url}"
+		user="${database.username}" password="${database.password}" doc:name="MySQL Configuration" />
+
+	<quartz:connector name="Quartz" validateConnections="true"
+		doc:name="Quartz" />
+
+	<http:request-config name="HTTP_Request_Configuration"
+		host="${narobil.host.domain}" port="443" basePath="Api/Host/Optima"
+		doc:name="HTTP Request Configuration" protocol="HTTPS" />
+
+	<http:request-config name="HTTP_Request_Login_Configuration"
+		host="${narobil.host.domain}" port="443" basePath="Api/Host/Optima"
+		doc:name="HTTP Request Configuration" protocol="HTTPS">
+		<http:basic-authentication password="${narobil.password}"
+			username="${narobil.username}" preemptive="true" />
+	</http:request-config>
+
+	<smtp:gmail-connector name="SMTP" contentType="text/html"
+		validateConnections="true" subject="Billing Statement">
+	</smtp:gmail-connector>
+
+	<flow name="trigger_Flow">
+		<quartz:inbound-endpoint jobName="triggerJob"
+			cronExpression="0 */1 * ? * *" repeatInterval="0" responseTimeout="10000"
+			connector-ref="Quartz" doc:name="Quartz">
+			<quartz:event-generator-job>
+				<quartz:payload>START</quartz:payload>
+			</quartz:event-generator-job>
+		</quartz:inbound-endpoint>
+		<vm:outbound-endpoint path="login" doc:name="VM" />
+	</flow>
+
+</mule>

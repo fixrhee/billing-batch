@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd 
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd 
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+	<spring:beans>
+		<spring:bean id="PDFProcessorImpl" class="billing.batch.processor.PDFProcessor" />
+	</spring:beans>
+	<spring:beans>
+		<spring:bean id="InvoiceProcessorImpl" class="billing.batch.processor.InvoiceProcessor" />
+	</spring:beans>
+
+	<flow name="phase05_Flow">
+		<vm:inbound-endpoint path="phase5" doc:name="VM" />
+		<set-variable value="#[payload]" variableName="invoiceData"
+			doc:name="Variable" />
+		<set-variable variableName="traceID"
+			value="#[message.inboundProperties.'traceID']" doc:name="Variable" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query><![CDATA[SELECT name, msisdn, email, address FROM member WHERE id = #[invoiceData.member_id];]]></db:parameterized-query>
+		</db:select>
+		<set-variable variableName="memberName" value="#[payload[0].name]"
+			doc:name="Variable" />
+		<set-variable variableName="memberMsisdn" value="#[payload[0].msisdn]"
+			doc:name="Variable" />
+		<set-variable variableName="memberEmail" value="#[payload[0].email]"
+			doc:name="Variable" />
+		<set-variable variableName="memberAddress" value="#[payload[0].address]"
+			doc:name="Variable" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query><![CDATA[SELECT name, msisdn, email, address FROM member WHERE id = #[invoiceData.biller_id];]]></db:parameterized-query>
+		</db:select>
+		<set-variable variableName="billerName" value="#[payload[0].name]"
+			doc:name="Variable" />
+		<set-variable variableName="billerMsisdn" value="#[payload[0].msisdn]"
+			doc:name="Variable" />
+		<set-variable variableName="billerEmail" value="#[payload[0].email]"
+			doc:name="Variable" />
+		<set-variable variableName="billerAddress" value="#[payload[0].address]"
+			doc:name="Variable" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query><![CDATA[SELECT name, description, billing_cycle FROM billing WHERE id = #[invoiceData.billing_id];]]></db:parameterized-query>
+		</db:select>
+		<set-variable variableName="billingName" value="#[payload[0].name]"
+			doc:name="Variable" />
+		<set-variable variableName="billingDesc" value="#[payload[0].description]"
+			doc:name="Variable" />
+		<set-variable variableName="billingCycle" value="#[payload[0].billing_cycle]"
+			doc:name="Variable" />
+		<invoke method="formatItems" object-ref="InvoiceProcessorImpl"
+			methodArguments="#[flowVars['invoiceData'].description]" />
+		<logger level="INFO" message="[Items : #[payload]" />
+		<parse-template doc:name="Parse Template"
+			doc:id="53211517-f943-40b2-86e3-20a0e1ca4eb6" location="src/main/resources/invoice-print.html"
+			mimeType="text/plain" />
+		<invoke object-ref="PDFProcessorImpl" method="createPDF"
+			methodArguments="#[invoiceData.invoice_number], #[payload]" />
+
+
+		<!-- message-properties-transformer> <add-message-property key="content-type" 
+			value="text/html" /> </message-properties-transformer> <smtp:outbound-endpoint 
+			user="tagpintar@gmail.com" connector-ref="SMTP" password="27Arie07@!" host="smtp.gmail.com" 
+			port="587" to="#[memberEmail]" from="Tagihan Pintar"> <email:string-to-email-transformer 
+			/> </smtp:outbound-endpoint> <object-to-string-transformer / -->
+
+	</flow>
+
+</mule>

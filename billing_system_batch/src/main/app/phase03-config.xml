@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+	<flow name="phase03_Flow">
+		<vm:inbound-endpoint path="phase3" doc:name="VM" />
+		<set-variable variableName="token" value="#[payload.token]"
+			doc:name="Variable" />
+		<set-variable variableName="invoiceData" value="#[payload]"
+			doc:name="Variable" />
+		<set-variable variableName="traceID"
+			value="#[message.inboundProperties.'traceID']" doc:name="Variable" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query><![CDATA[SELECT payment_code FROM invoice_published WHERE invoice_id = #[payload.id] ORDER BY id DESC LIMIT 1;]]></db:parameterized-query>
+		</db:select>
+		<choice doc:name="Choice">
+			<when expression="#[payload.size() > 0]">
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [PAYMENT Code Exist : #[payload]]"
+					doc:name="Logger" />
+				<expression-component doc:name="Expression">
+					<![CDATA[
+					requestMap = flowVars['invoiceData'];
+					requestMap['paymentCode']= payload[0].payment_code;	
+					payload = requestMap;]]>
+				</expression-component>
+				<message-properties-transformer>
+					<add-message-property value="#[flowVars['traceID']]"
+						key="traceID" />
+				</message-properties-transformer>
+				<vm:outbound-endpoint path="phase4" doc:name="VM" />
+			</when>
+			<otherwise>
+				<logger level="INFO"
+					message="[#[flowVars['traceID']]] - [PAYMENT Code NOT Exist For InvoiceNo :  #[flowVars['invoiceData'].invoice_number]]"
+					doc:name="Logger" />
+				<set-payload value="#[flowVars['invoiceData']]"
+					doc:name="Set Payload" />
+				<db:select config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query><![CDATA[SELECT name,email FROM member WHERE id = #[payload.member_id];]]></db:parameterized-query>
+				</db:select>
+				<set-variable variableName="memberName" value="#[payload[0].name]"
+					doc:name="Variable" />
+				<set-variable variableName="memberEmail" value="#[payload[0].email]"
+					doc:name="Variable" />
+				<flow-ref name="narobilRegisterBilling" doc:name="Flow Reference" />
+				<choice doc:name="Choice">
+					<when expression="payload.error != null">
+						<logger level="INFO" message="[#[flowVars['traceID']]] - [INVALID APIKey]"
+							doc:name="Logger" />
+						<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+							<db:parameterized-query><![CDATA[INSERT into message (from_member_id, to_member_id, subject, body) values (#[1], #[flowVars['invoiceData'].biller_id], "Invoice Failed to Publish", "The following Invoice Number : " #[flowVars['invoiceData'].invoice_number] " failed to publish");]]></db:parameterized-query>
+						</db:insert>
+					</when>
+					<when expression="#[payload.status.message != 'PROCESSED']">
+						<logger level="INFO"
+							message="[#[flowVars['traceID']]] - [Narobil VARegister Failed]"
+							doc:name="Logger" />
+						<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+							<db:parameterized-query><![CDATA[INSERT into message (from_member_id, to_member_id, subject, body) values (#[1], #[flowVars['invoiceData'].biller_id], "Invoice Failed to Publish", "The following Invoice Number : " #[flowVars['invoiceData'].invoice_number] " failed to publish");]]></db:parameterized-query>
+						</db:insert>
+					</when>
+					<otherwise>
+						<logger level="INFO"
+							message="[#[flowVars['traceID']]] - [PHASE-03 Narobil VARegister Response : #[payload.PaymentCollectionResponse[0].recordDetail.paymentCode]]"
+							doc:name="Logger" />
+						<set-variable
+							value="#[payload.PaymentCollectionResponse[0].recordDetail.paymentCode]"
+							variableName="paymentCode" doc:name="Variable" />
+						<expression-component doc:name="Expression">
+							<![CDATA[
+							requestMap = flowVars['invoiceData'];
+							requestMap['paymentCode']= flowVars['paymentCode'];	
+							payload = requestMap;]]>
+						</expression-component>
+						<message-properties-transformer>
+							<add-message-property value="#[flowVars['traceID']]"
+								key="traceID" />
+						</message-properties-transformer>
+						<vm:outbound-endpoint path="phase4" doc:name="VM" />
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+	</flow>
+
+	<sub-flow name="narobilRegisterBilling">
+		<expression-component doc:name="Expression">
+			<![CDATA[
+			requestMap = new java.util.HashMap();
+			requestMap['token']= flowVars['token'];	
+			requestMap['callbackUrl']= 'http://localhost:49809';
+			requestMap['referenceNumber']= flowVars['invoiceData'].invoice_number;	
+			requestMap['amount']= flowVars['invoiceData'].amount;	
+			requestMap['name']= flowVars['memberName'];	
+			requestMap['email']= flowVars['memberEmail'];	
+			requestMap['fullPayment']= 'true';
+			requestMap['persistent']= 'true';
+			payload = requestMap;]]>
+		</expression-component>
+		<message-properties-transformer
+			doc:name="Message Properties">
+			<add-message-property value="${narobil.api.key}"
+				key="APIKey" />
+			<add-message-property
+				value="d2a94c92c9dea6074b166f423261e1a6f417c0fcb71382535131d2b3d814e2a3"
+				key="RequestAuth" />
+		</message-properties-transformer>
+		<http:request config-ref="HTTP_Request_Configuration"
+			path="PaymentCollection/Billing" method="POST" doc:name="HTTP">
+			<http:success-status-code-validator
+				values="200,400,401,403,440,498,500" />
+		</http:request>
+		<json:json-to-object-transformer
+			returnClass="java.util.Map" mimeType="application/java" doc:name="JSON to Object" />
+	</sub-flow>
+
+</mule>
